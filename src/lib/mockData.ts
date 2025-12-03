@@ -13,14 +13,23 @@ export interface LoginAttempt {
   success: boolean;
 }
 
-export interface SecurityFactor {
+export interface SecuritySubFactor {
+  id: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  weight: number;
+  details?: string;
+}
+
+export interface SecurityFactorGroup {
   id: string;
   name: string;
   description: string;
   category: 'positive' | 'negative';
-  isActive: boolean;
-  weight: number;
-  details?: string;
+  maxScore: number;
+  currentScore: number;
+  subFactors: SecuritySubFactor[];
 }
 
 export interface UserSecurityData {
@@ -31,7 +40,7 @@ export interface UserSecurityData {
   lastPasswordChange: Date | null;
   isNewUser: boolean;
   failedLoginAttempts: number;
-  factors: SecurityFactor[];
+  factorGroups: SecurityFactorGroup[];
   loginHistory: LoginAttempt[];
 }
 
@@ -129,77 +138,70 @@ export function generateSecurityData(): UserSecurityData {
   const manyFailedAttempts = score < 50 && Math.random() > 0.4;
   const differentInfrastructure = score < 45 && Math.random() > 0.5;
   
-  const factors: SecurityFactor[] = [
-    {
-      id: 'password_change',
-      name: 'Troca de Senha Recente',
-      description: 'Senha alterada nos últimos 3 meses',
-      category: 'positive',
-      isActive: hasRecentPasswordChange,
-      weight: 10,
-      details: hasRecentPasswordChange 
-        ? `Última alteração: ${lastPasswordChange.toLocaleDateString('pt-BR')}`
-        : 'Senha não alterada há mais de 3 meses'
-    },
+  // Atividade de Segurança Recente - max 50 points
+  const securityActivitySubFactors: SecuritySubFactor[] = [
     {
       id: 'same_ip',
       name: 'Endereço IP Reconhecido',
       description: 'Utilizando mesmo IP de sessões anteriores',
-      category: 'positive',
       isActive: !isNewUser && sameIPUsed,
-      weight: 8,
+      weight: 10,
       details: sameIPUsed ? 'IP corresponde ao histórico de logins' : 'IP não reconhecido no histórico'
     },
     {
       id: 'same_user_agent',
       name: 'User Agent Reconhecido',
       description: 'Mesmo navegador e SO de sessões anteriores',
-      category: 'positive',
       isActive: !isNewUser && sameUserAgentUsed,
-      weight: 8,
+      weight: 10,
       details: sameUserAgentUsed ? 'Dispositivo corresponde ao histórico' : 'Dispositivo não reconhecido'
     },
     {
       id: 'same_country',
       name: 'Geolocalização Reconhecida',
       description: 'Login do mesmo país de sessões anteriores',
-      category: 'positive',
       isActive: !isNewUser && sameCountryUsed,
-      weight: 10,
+      weight: 15,
       details: sameCountryUsed ? 'Localização consistente com histórico' : 'País diferente do habitual'
     },
     {
       id: 'same_fingerprint',
       name: 'Fingerprint Reconhecido',
       description: 'Dispositivo identificado em sessões anteriores',
-      category: 'positive',
       isActive: !isNewUser && sameFingerprintUsed,
-      weight: 12,
+      weight: 15,
       details: sameFingerprintUsed ? 'Fingerprint corresponde ao histórico' : 'Fingerprint não reconhecido'
-    },
+    }
+  ];
+
+  // Signin e Recovery - max 50 points
+  const signinRecoverySubFactors: SecuritySubFactor[] = [
     {
       id: 'otp_enabled',
       name: '2FA via OTP Habilitado',
       description: 'Autenticação de dois fatores via aplicativo',
-      category: 'positive',
       isActive: hasOtpEnabled,
-      weight: 15,
+      weight: 25,
       details: hasOtpEnabled ? 'Proteção adicional ativa' : 'Considere habilitar OTP para maior segurança'
     },
     {
-      id: 'standard_behavior',
-      name: 'Comportamento Padrão',
-      description: 'Horário e frequência de login consistentes',
-      category: 'positive',
-      isActive: !isNewUser && standardBehavior,
-      weight: 10,
-      details: standardBehavior ? 'Padrão de acesso consistente' : 'Comportamento fora do padrão habitual'
-    },
+      id: 'password_change',
+      name: 'Troca de Senha Recente',
+      description: 'Senha alterada nos últimos 3 meses',
+      isActive: hasRecentPasswordChange,
+      weight: 25,
+      details: hasRecentPasswordChange 
+        ? `Última alteração: ${lastPasswordChange?.toLocaleDateString('pt-BR')}`
+        : 'Senha não alterada há mais de 3 meses'
+    }
+  ];
+
+  // Fatores de Alerta - negative/subtractive
+  const alertSubFactors: SecuritySubFactor[] = [
     {
       id: 'failed_attempts',
       name: 'Tentativas de Login Falhas',
       description: 'Múltiplas tentativas sem sucesso detectadas',
-      category: 'negative',
       isActive: manyFailedAttempts,
       weight: -15,
       details: manyFailedAttempts ? `${failedLoginAttempts} tentativas falhas recentes` : 'Nenhuma tentativa suspeita'
@@ -208,10 +210,46 @@ export function generateSecurityData(): UserSecurityData {
       id: 'different_infrastructure',
       name: 'Infraestrutura Variável',
       description: 'Logins de múltiplos dispositivos/locais',
-      category: 'negative',
       isActive: differentInfrastructure,
       weight: -12,
       details: differentInfrastructure ? 'Possível ataque de validação de lista' : 'Infraestrutura consistente'
+    }
+  ];
+
+  const calcGroupScore = (subFactors: SecuritySubFactor[], isNegative: boolean = false) => {
+    if (isNegative) {
+      return subFactors.filter(f => f.isActive).reduce((sum, f) => sum + Math.abs(f.weight), 0);
+    }
+    return subFactors.filter(f => f.isActive).reduce((sum, f) => sum + f.weight, 0);
+  };
+
+  const factorGroups: SecurityFactorGroup[] = [
+    {
+      id: 'security_activity',
+      name: 'Atividade de Segurança Recente',
+      description: 'Comportamento, infraestrutura e dispositivos',
+      category: 'positive',
+      maxScore: 50,
+      currentScore: calcGroupScore(securityActivitySubFactors),
+      subFactors: securityActivitySubFactors
+    },
+    {
+      id: 'signin_recovery',
+      name: 'Signin e Recovery',
+      description: 'Autenticação 2FA e recuperação de senha',
+      category: 'positive',
+      maxScore: 50,
+      currentScore: calcGroupScore(signinRecoverySubFactors),
+      subFactors: signinRecoverySubFactors
+    },
+    {
+      id: 'alert_factors',
+      name: 'Fatores de Alerta',
+      description: 'Tentativas falhas e infraestrutura variável',
+      category: 'negative',
+      maxScore: 27,
+      currentScore: calcGroupScore(alertSubFactors, true),
+      subFactors: alertSubFactors
     }
   ];
   
@@ -223,7 +261,7 @@ export function generateSecurityData(): UserSecurityData {
     lastPasswordChange,
     isNewUser,
     failedLoginAttempts,
-    factors,
+    factorGroups,
     loginHistory
   };
 }

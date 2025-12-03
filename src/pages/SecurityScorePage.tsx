@@ -13,11 +13,12 @@ interface SecurityScorePageProps {
 }
 
 export function SecurityScorePage({ securityData, onBack, onRefresh }: SecurityScorePageProps) {
-  const positiveFactors = securityData.factors.filter(f => f.category === 'positive');
-  const negativeFactors = securityData.factors.filter(f => f.category === 'negative');
+  const positiveGroups = securityData.factorGroups.filter(g => g.category === 'positive');
+  const negativeGroups = securityData.factorGroups.filter(g => g.category === 'negative');
   
-  const activePositiveCount = positiveFactors.filter(f => f.isActive).length;
-  const activeNegativeCount = negativeFactors.filter(f => f.isActive).length;
+  const totalPositiveScore = positiveGroups.reduce((sum, g) => sum + g.currentScore, 0);
+  const totalMaxPositive = positiveGroups.reduce((sum, g) => sum + g.maxScore, 0);
+  const totalNegativePenalty = negativeGroups.reduce((sum, g) => sum + g.currentScore, 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -61,23 +62,23 @@ export function SecurityScorePage({ securityData, onBack, onRefresh }: SecurityS
                 <div className="bg-status-success/10 border border-status-success/30 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle2 className="h-5 w-5 text-status-success" />
-                    <span className="font-medium text-status-success">Fatores Positivos</span>
+                    <span className="font-medium text-status-success">Pontos Positivos</span>
                   </div>
                   <p className="text-2xl font-bold text-foreground">
-                    {activePositiveCount}/{positiveFactors.length}
+                    {totalPositiveScore}/{totalMaxPositive}
                   </p>
-                  <p className="text-xs text-muted-foreground">ativos</p>
+                  <p className="text-xs text-muted-foreground">pontos ativos</p>
                 </div>
                 
                 <div className="bg-status-warning/10 border border-status-warning/30 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="h-5 w-5 text-status-warning" />
-                    <span className="font-medium text-status-warning">Alertas</span>
+                    <span className="font-medium text-status-warning">Penalidades</span>
                   </div>
                   <p className="text-2xl font-bold text-foreground">
-                    {activeNegativeCount}
+                    -{totalNegativePenalty}
                   </p>
-                  <p className="text-xs text-muted-foreground">detectados</p>
+                  <p className="text-xs text-muted-foreground">pontos de alerta</p>
                 </div>
               </div>
 
@@ -106,32 +107,11 @@ export function SecurityScorePage({ securityData, onBack, onRefresh }: SecurityS
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="factors" className="space-y-6">
-            {/* Positive Factors */}
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <CheckCircle2 className="h-5 w-5 text-status-success" />
-                <h3 className="text-lg font-semibold text-foreground">Fatores Positivos</h3>
-              </div>
-              <div className="space-y-3">
-                {positiveFactors.map(factor => (
-                  <SecurityFactorCard key={factor.id} factor={factor} />
-                ))}
-              </div>
-            </section>
-
-            {/* Negative Factors */}
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <AlertCircle className="h-5 w-5 text-status-warning" />
-                <h3 className="text-lg font-semibold text-foreground">Fatores de Alerta</h3>
-              </div>
-              <div className="space-y-3">
-                {negativeFactors.map(factor => (
-                  <SecurityFactorCard key={factor.id} factor={factor} />
-                ))}
-              </div>
-            </section>
+          <TabsContent value="factors" className="space-y-4">
+            {/* All Factor Groups */}
+            {securityData.factorGroups.map(group => (
+              <SecurityFactorCard key={group.id} group={group} />
+            ))}
           </TabsContent>
 
           <TabsContent value="history">
