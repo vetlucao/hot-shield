@@ -115,28 +115,23 @@ export function generateLoginHistory(count: number, consistentData: boolean = tr
 }
 
 export function generateSecurityData(): UserSecurityData {
-  const score = Math.floor(Math.random() * 101);
-  const scoreLevel = getScoreLevel(score);
-  
   const isNewUser = Math.random() > 0.85;
-  const hasOtpEnabled = score > 50 ? Math.random() > 0.3 : Math.random() > 0.7;
-  const hasRecentPasswordChange = score > 60 ? Math.random() > 0.4 : Math.random() > 0.8;
-  const failedLoginAttempts = score < 50 ? Math.floor(Math.random() * 10) + 3 : Math.floor(Math.random() * 3);
+  
+  // Randomly determine factor states
+  const hasOtpEnabled = Math.random() > 0.5;
+  const hasRecentPasswordChange = Math.random() > 0.5;
+  const sameIPUsed = !isNewUser && Math.random() > 0.4;
+  const sameUserAgentUsed = !isNewUser && Math.random() > 0.4;
+  const sameCountryUsed = !isNewUser && Math.random() > 0.3;
+  const sameFingerprintUsed = !isNewUser && Math.random() > 0.4;
+  const manyFailedAttempts = Math.random() > 0.7;
+  const differentInfrastructure = Math.random() > 0.7;
+  
+  const failedLoginAttempts = manyFailedAttempts ? Math.floor(Math.random() * 7) + 3 : Math.floor(Math.random() * 2);
   
   const lastPasswordChange = hasRecentPasswordChange 
     ? new Date(Date.now() - Math.floor(Math.random() * 90 * 24 * 60 * 60 * 1000))
     : new Date(Date.now() - Math.floor(Math.random() * 365 * 24 * 60 * 60 * 1000) - 90 * 24 * 60 * 60 * 1000);
-  
-  const loginHistory = generateLoginHistory(Math.floor(Math.random() * 6) + 5, score > 50);
-  
-  // Calculate factor states based on score
-  const sameIPUsed = score > 40 && Math.random() > 0.3;
-  const sameUserAgentUsed = score > 45 && Math.random() > 0.35;
-  const sameCountryUsed = score > 35 && Math.random() > 0.25;
-  const sameFingerprintUsed = score > 50 && Math.random() > 0.4;
-  const standardBehavior = score > 55 && Math.random() > 0.35;
-  const manyFailedAttempts = score < 50 && Math.random() > 0.4;
-  const differentInfrastructure = score < 45 && Math.random() > 0.5;
   
   // Atividade de Segurança Recente - max 50 points
   const securityActivitySubFactors: SecuritySubFactor[] = [
@@ -252,6 +247,19 @@ export function generateSecurityData(): UserSecurityData {
       subFactors: alertSubFactors
     }
   ];
+
+  // Calculate score based on factors: positive points - penalties
+  const positiveScore = factorGroups
+    .filter(g => g.category === 'positive')
+    .reduce((sum, g) => sum + g.currentScore, 0);
+  const penaltyScore = factorGroups
+    .filter(g => g.category === 'negative')
+    .reduce((sum, g) => sum + g.currentScore, 0);
+  
+  const score = Math.max(0, Math.min(100, positiveScore - penaltyScore));
+  const scoreLevel = getScoreLevel(score);
+  
+  const loginHistory = generateLoginHistory(Math.floor(Math.random() * 6) + 5, score > 50);
   
   return {
     score,
