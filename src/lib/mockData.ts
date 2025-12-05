@@ -114,18 +114,102 @@ export function generateLoginHistory(count: number, consistentData: boolean = tr
   return logins.sort((a, b) => b.dateTime.getTime() - a.dateTime.getTime());
 }
 
+// Analyze login history to determine infrastructure factors
+function analyzeLoginHistory(history: LoginAttempt[]) {
+  if (history.length < 2) {
+    return {
+      sameIPUsed: false,
+      sameFingerprintUsed: false,
+      sameCountryUsed: false,
+      sameUserAgentUsed: false,
+      goodIPReputation: false,
+      ipConsistencyRate: 0,
+      fingerprintConsistencyRate: 0,
+      countryConsistencyRate: 0,
+      userAgentConsistencyRate: 0,
+      mostUsedIP: '',
+      mostUsedFingerprint: '',
+      mostUsedCountry: '',
+      mostUsedUserAgent: ''
+    };
+  }
+
+  // Get the most recent login as "current"
+  const currentLogin = history[0];
+  const previousLogins = history.slice(1);
+  
+  // Count occurrences
+  const ipCount: Record<string, number> = {};
+  const fingerprintCount: Record<string, number> = {};
+  const countryCount: Record<string, number> = {};
+  const userAgentCount: Record<string, number> = {};
+  
+  previousLogins.forEach(login => {
+    ipCount[login.ip] = (ipCount[login.ip] || 0) + 1;
+    fingerprintCount[login.fingerprint] = (fingerprintCount[login.fingerprint] || 0) + 1;
+    countryCount[login.country] = (countryCount[login.country] || 0) + 1;
+    const userAgent = `${login.os}|${login.browser}`;
+    userAgentCount[userAgent] = (userAgentCount[userAgent] || 0) + 1;
+  });
+  
+  // Find most common values
+  const getMostCommon = (counts: Record<string, number>) => {
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  };
+  
+  const mostUsedIP = getMostCommon(ipCount);
+  const mostUsedFingerprint = getMostCommon(fingerprintCount);
+  const mostUsedCountry = getMostCommon(countryCount);
+  const mostUsedUserAgent = getMostCommon(userAgentCount);
+  
+  // Calculate consistency rates (how often the current matches historical)
+  const totalPrevious = previousLogins.length;
+  const ipConsistencyRate = (ipCount[currentLogin.ip] || 0) / totalPrevious;
+  const fingerprintConsistencyRate = (fingerprintCount[currentLogin.fingerprint] || 0) / totalPrevious;
+  const countryConsistencyRate = (countryCount[currentLogin.country] || 0) / totalPrevious;
+  const currentUserAgent = `${currentLogin.os}|${currentLogin.browser}`;
+  const userAgentConsistencyRate = (userAgentCount[currentUserAgent] || 0) / totalPrevious;
+  
+  // Check if current login matches most common patterns (threshold: 30%)
+  const sameIPUsed = ipConsistencyRate >= 0.3 || currentLogin.ip === mostUsedIP;
+  const sameFingerprintUsed = fingerprintConsistencyRate >= 0.3 || currentLogin.fingerprint === mostUsedFingerprint;
+  const sameCountryUsed = countryConsistencyRate >= 0.3 || currentLogin.country === mostUsedCountry;
+  const sameUserAgentUsed = userAgentConsistencyRate >= 0.3 || currentUserAgent === mostUsedUserAgent;
+  
+  // IP reputation - check if country is not high risk
+  const goodIPReputation = !highRiskCountries.includes(currentLogin.country);
+  
+  return {
+    sameIPUsed,
+    sameFingerprintUsed,
+    sameCountryUsed,
+    sameUserAgentUsed,
+    goodIPReputation,
+    ipConsistencyRate,
+    fingerprintConsistencyRate,
+    countryConsistencyRate,
+    userAgentConsistencyRate,
+    mostUsedIP,
+    mostUsedFingerprint,
+    mostUsedCountry,
+    mostUsedUserAgent
+  };
+}
+
 export function generateSecurityData(): UserSecurityData {
   const isNewUser = Math.random() > 0.85;
   
-  // Randomly determine factor states
+  // Generate login history first
+  const loginHistoryCount = isNewUser ? 1 : Math.floor(Math.random() * 6) + 5;
+  const loginHistory = generateLoginHistory(loginHistoryCount, Math.random() > 0.4);
+  
+  // Analyze login history for infrastructure factors
+  const historyAnalysis = analyzeLoginHistory(loginHistory);
+  
+  // Randomly determine other factor states
   const hasOtpEnabled = Math.random() > 0.5;
   const hasRecentPasswordChange = Math.random() > 0.5;
-  const sameIPUsed = !isNewUser && Math.random() > 0.4;
-  const sameUserAgentUsed = !isNewUser && Math.random() > 0.4;
-  const sameCountryUsed = !isNewUser && Math.random() > 0.3;
-  const sameFingerprintUsed = !isNewUser && Math.random() > 0.4;
   const manyFailedAttempts = Math.random() > 0.7;
-  const differentInfrastructure = Math.random() > 0.7;
   
   const failedLoginAttempts = manyFailedAttempts ? Math.floor(Math.random() * 7) + 3 : Math.floor(Math.random() * 2);
   
@@ -133,7 +217,7 @@ export function generateSecurityData(): UserSecurityData {
     ? new Date(Date.now() - Math.floor(Math.random() * 90 * 24 * 60 * 60 * 1000))
     : new Date(Date.now() - Math.floor(Math.random() * 365 * 24 * 60 * 60 * 1000) - 90 * 24 * 60 * 60 * 1000);
   
-  // Random factor states for Comportamento Temporal
+  // Random factor states for Comportamento Temporal (based on history analysis)
   const standardShift = !isNewUser && Math.random() > 0.4;
   const lowDispersion = !isNewUser && Math.random() > 0.4;
   const noAnomalies = !isNewUser && Math.random() > 0.3;
@@ -141,55 +225,67 @@ export function generateSecurityData(): UserSecurityData {
   // Random factor states for Segurança de Conta
   const lowFailedAttempts = Math.random() > 0.3;
 
-  // 1. Infraestrutura e Rede - max 40 points
+  // 1. Infraestrutura e Rede - max 40 points (based on login history)
   const infraNetworkSubFactors: SecuritySubFactor[] = [
     {
       id: 'same_ip',
       name: 'Endereço IP Reconhecido',
       description: 'Utilizando mesmo IP de sessões anteriores',
-      isActive: !isNewUser && sameIPUsed,
+      isActive: !isNewUser && historyAnalysis.sameIPUsed,
       weight: 8,
-      details: sameIPUsed ? 'IP corresponde ao histórico de logins' : 'IP não reconhecido no histórico'
+      details: historyAnalysis.sameIPUsed 
+        ? `IP corresponde ao histórico (${Math.round(historyAnalysis.ipConsistencyRate * 100)}% consistência)` 
+        : 'IP não reconhecido no histórico'
     },
     {
       id: 'same_fingerprint',
       name: 'Fingerprint Reconhecido',
       description: 'Dispositivo identificado em sessões anteriores',
-      isActive: !isNewUser && sameFingerprintUsed,
+      isActive: !isNewUser && historyAnalysis.sameFingerprintUsed,
       weight: 8,
-      details: sameFingerprintUsed ? 'Fingerprint corresponde ao histórico' : 'Fingerprint não reconhecido'
+      details: historyAnalysis.sameFingerprintUsed 
+        ? `Fingerprint corresponde ao histórico (${Math.round(historyAnalysis.fingerprintConsistencyRate * 100)}% consistência)` 
+        : 'Fingerprint não reconhecido'
     },
     {
       id: 'ip_reputation',
       name: 'Reputação do IP',
       description: 'IP sem histórico de atividades suspeitas',
-      isActive: !isNewUser && Math.random() > 0.3,
+      isActive: !isNewUser && historyAnalysis.goodIPReputation,
       weight: 8,
-      details: 'IP verificado em bases de reputação'
+      details: historyAnalysis.goodIPReputation 
+        ? 'IP verificado - sem riscos detectados' 
+        : 'IP de região com alto risco identificado'
     },
     {
       id: 'same_country',
       name: 'Geolocalização Reconhecida',
       description: 'Login do mesmo país de sessões anteriores',
-      isActive: !isNewUser && sameCountryUsed,
+      isActive: !isNewUser && historyAnalysis.sameCountryUsed,
       weight: 6,
-      details: sameCountryUsed ? 'Localização consistente com histórico' : 'País diferente do habitual'
+      details: historyAnalysis.sameCountryUsed 
+        ? `Localização consistente com histórico (${Math.round(historyAnalysis.countryConsistencyRate * 100)}% consistência)` 
+        : 'País diferente do habitual'
     },
     {
       id: 'same_device',
       name: 'Dispositivo Reconhecido',
       description: 'Mesmo dispositivo de sessões anteriores',
-      isActive: !isNewUser && sameFingerprintUsed,
+      isActive: !isNewUser && historyAnalysis.sameFingerprintUsed,
       weight: 5,
-      details: sameFingerprintUsed ? 'Dispositivo corresponde ao histórico' : 'Dispositivo não reconhecido'
+      details: historyAnalysis.sameFingerprintUsed 
+        ? 'Dispositivo corresponde ao histórico' 
+        : 'Dispositivo não reconhecido'
     },
     {
       id: 'same_user_agent',
       name: 'User Agent Reconhecido',
       description: 'Mesmo navegador e SO de sessões anteriores',
-      isActive: !isNewUser && sameUserAgentUsed,
+      isActive: !isNewUser && historyAnalysis.sameUserAgentUsed,
       weight: 5,
-      details: sameUserAgentUsed ? 'User agent corresponde ao histórico' : 'User agent não reconhecido'
+      details: historyAnalysis.sameUserAgentUsed 
+        ? `User agent corresponde ao histórico (${Math.round(historyAnalysis.userAgentConsistencyRate * 100)}% consistência)` 
+        : 'User agent não reconhecido'
     }
   ];
 
@@ -290,8 +386,6 @@ export function generateSecurityData(): UserSecurityData {
   // Calculate score based on factors sum (all positive now, max 100)
   const score = Math.max(0, Math.min(100, factorGroups.reduce((sum, g) => sum + g.currentScore, 0)));
   const scoreLevel = getScoreLevel(score);
-  
-  const loginHistory = generateLoginHistory(Math.floor(Math.random() * 6) + 5, score > 50);
   
   return {
     score,
