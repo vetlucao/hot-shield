@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Check, AlertTriangle, ChevronDown, ChevronUp, Shield, Key, AlertCircle } from "lucide-react";
+import { Check, AlertTriangle, ChevronDown, ChevronUp, Globe, Clock, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { SecurityFactorGroup, SecuritySubFactor } from "@/lib/mockData";
 
@@ -8,13 +8,13 @@ interface SecurityFactorCardProps {
 }
 
 const groupIcons = {
-  security_activity: Shield,
-  signin_recovery: Key,
-  alert_factors: AlertCircle
+  infra_network: Globe,
+  temporal_behavior: Clock,
+  account_security: ShieldCheck
 };
 
-function SubFactorItem({ factor, isNegativeGroup }: { factor: SecuritySubFactor; isNegativeGroup: boolean }) {
-  const isProtected = isNegativeGroup ? !factor.isActive : factor.isActive;
+function SubFactorItem({ factor }: { factor: SecuritySubFactor }) {
+  const isProtected = factor.isActive;
   
   return (
     <div className={cn(
@@ -42,7 +42,7 @@ function SubFactorItem({ factor, isNegativeGroup }: { factor: SecuritySubFactor;
             ? "bg-status-success/20 text-status-success" 
             : "bg-status-warning/20 text-status-warning"
         )}>
-          {factor.weight > 0 ? '+' : ''}{factor.weight} pts
+          {isProtected ? `+${factor.weight}` : '0'} pts
         </span>
       </div>
     </div>
@@ -52,10 +52,8 @@ function SubFactorItem({ factor, isNegativeGroup }: { factor: SecuritySubFactor;
 export function SecurityFactorCard({ group }: SecurityFactorCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const isNegative = group.category === 'negative';
-  const Icon = groupIcons[group.id as keyof typeof groupIcons] || Shield;
-  
-  const hasIssues = isNegative ? group.currentScore > 0 : group.currentScore < group.maxScore;
+  const Icon = groupIcons[group.id as keyof typeof groupIcons] || Globe;
+  const hasIssues = group.currentScore < group.maxScore;
 
   const statusConfig = hasIssues
     ? {
@@ -96,13 +94,11 @@ export function SecurityFactorCard({ group }: SecurityFactorCardProps) {
           <div className="text-right">
             <span className={cn(
               "text-lg font-bold",
-              isNegative 
-                ? (group.currentScore > 0 ? "text-status-warning" : "text-status-success")
-                : (group.currentScore === group.maxScore ? "text-status-success" : "text-status-warning")
+              group.currentScore === group.maxScore ? "text-status-success" : "text-status-warning"
             )}>
-              {isNegative ? `-${group.currentScore}` : group.currentScore}
+              {group.currentScore}
             </span>
-            <span className="text-sm text-muted-foreground">/{isNegative ? group.maxScore : group.maxScore}</span>
+            <span className="text-sm text-muted-foreground">/{group.maxScore}</span>
           </div>
           {isExpanded ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -115,11 +111,7 @@ export function SecurityFactorCard({ group }: SecurityFactorCardProps) {
       {isExpanded && (
         <div className="border-t border-border/30">
           {group.subFactors.map(factor => (
-            <SubFactorItem 
-              key={factor.id} 
-              factor={factor} 
-              isNegativeGroup={isNegative}
-            />
+            <SubFactorItem key={factor.id} factor={factor} />
           ))}
         </div>
       )}

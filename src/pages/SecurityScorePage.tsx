@@ -1,4 +1,4 @@
-import { ArrowLeft, RefreshCw, Shield, History, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, RefreshCw, Shield, History, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserSecurityData } from "@/lib/mockData";
 import { SecurityFactorCard } from "@/components/SecurityFactorCard";
@@ -13,12 +13,8 @@ interface SecurityScorePageProps {
 }
 
 export function SecurityScorePage({ securityData, onBack, onRefresh }: SecurityScorePageProps) {
-  const positiveGroups = securityData.factorGroups.filter(g => g.category === 'positive');
-  const negativeGroups = securityData.factorGroups.filter(g => g.category === 'negative');
-  
-  const totalPositiveScore = positiveGroups.reduce((sum, g) => sum + g.currentScore, 0);
-  const totalMaxPositive = positiveGroups.reduce((sum, g) => sum + g.maxScore, 0);
-  const totalNegativePenalty = negativeGroups.reduce((sum, g) => sum + g.currentScore, 0);
+  const totalScore = securityData.factorGroups.reduce((sum, g) => sum + g.currentScore, 0);
+  const totalMaxScore = securityData.factorGroups.reduce((sum, g) => sum + g.maxScore, 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,28 +54,15 @@ export function SecurityScorePage({ securityData, onBack, onRefresh }: SecurityS
                 </p>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-status-success/10 border border-status-success/30 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle2 className="h-5 w-5 text-status-success" />
-                    <span className="font-medium text-status-success">Pontos Positivos</span>
-                  </div>
-                  <p className="text-2xl font-bold text-foreground">
-                    {totalPositiveScore}/{totalMaxPositive}
-                  </p>
-                  <p className="text-xs text-muted-foreground">pontos ativos</p>
+              <div className="bg-card border border-border p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="h-5 w-5 text-status-success" />
+                  <span className="font-medium text-foreground">Pontuação Total</span>
                 </div>
-                
-                <div className="bg-status-warning/10 border border-status-warning/30 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="h-5 w-5 text-status-warning" />
-                    <span className="font-medium text-status-warning">Penalidades</span>
-                  </div>
-                  <p className="text-2xl font-bold text-foreground">
-                    -{totalNegativePenalty}
-                  </p>
-                  <p className="text-xs text-muted-foreground">pontos de alerta</p>
-                </div>
+                <p className="text-2xl font-bold text-foreground">
+                  {totalScore}/{totalMaxScore}
+                </p>
+                <p className="text-xs text-muted-foreground">pontos ativos de 100</p>
               </div>
 
               {securityData.isNewUser && (
