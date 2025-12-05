@@ -133,50 +133,102 @@ export function generateSecurityData(): UserSecurityData {
     ? new Date(Date.now() - Math.floor(Math.random() * 90 * 24 * 60 * 60 * 1000))
     : new Date(Date.now() - Math.floor(Math.random() * 365 * 24 * 60 * 60 * 1000) - 90 * 24 * 60 * 60 * 1000);
   
-  // Atividade de Segurança Recente - max 50 points
-  const securityActivitySubFactors: SecuritySubFactor[] = [
+  // Random factor states for Comportamento Temporal
+  const standardShift = !isNewUser && Math.random() > 0.4;
+  const lowDispersion = !isNewUser && Math.random() > 0.4;
+  const noAnomalies = !isNewUser && Math.random() > 0.3;
+  
+  // Random factor states for Segurança de Conta
+  const lowFailedAttempts = Math.random() > 0.3;
+
+  // 1. Infraestrutura e Rede - max 40 points
+  const infraNetworkSubFactors: SecuritySubFactor[] = [
     {
       id: 'same_ip',
       name: 'Endereço IP Reconhecido',
       description: 'Utilizando mesmo IP de sessões anteriores',
       isActive: !isNewUser && sameIPUsed,
-      weight: 10,
+      weight: 8,
       details: sameIPUsed ? 'IP corresponde ao histórico de logins' : 'IP não reconhecido no histórico'
-    },
-    {
-      id: 'same_user_agent',
-      name: 'User Agent Reconhecido',
-      description: 'Mesmo navegador e SO de sessões anteriores',
-      isActive: !isNewUser && sameUserAgentUsed,
-      weight: 10,
-      details: sameUserAgentUsed ? 'Dispositivo corresponde ao histórico' : 'Dispositivo não reconhecido'
-    },
-    {
-      id: 'same_country',
-      name: 'Geolocalização Reconhecida',
-      description: 'Login do mesmo país de sessões anteriores',
-      isActive: !isNewUser && sameCountryUsed,
-      weight: 15,
-      details: sameCountryUsed ? 'Localização consistente com histórico' : 'País diferente do habitual'
     },
     {
       id: 'same_fingerprint',
       name: 'Fingerprint Reconhecido',
       description: 'Dispositivo identificado em sessões anteriores',
       isActive: !isNewUser && sameFingerprintUsed,
-      weight: 15,
+      weight: 8,
       details: sameFingerprintUsed ? 'Fingerprint corresponde ao histórico' : 'Fingerprint não reconhecido'
+    },
+    {
+      id: 'ip_reputation',
+      name: 'Reputação do IP',
+      description: 'IP sem histórico de atividades suspeitas',
+      isActive: !isNewUser && Math.random() > 0.3,
+      weight: 8,
+      details: 'IP verificado em bases de reputação'
+    },
+    {
+      id: 'same_country',
+      name: 'Geolocalização Reconhecida',
+      description: 'Login do mesmo país de sessões anteriores',
+      isActive: !isNewUser && sameCountryUsed,
+      weight: 6,
+      details: sameCountryUsed ? 'Localização consistente com histórico' : 'País diferente do habitual'
+    },
+    {
+      id: 'same_device',
+      name: 'Dispositivo Reconhecido',
+      description: 'Mesmo dispositivo de sessões anteriores',
+      isActive: !isNewUser && sameFingerprintUsed,
+      weight: 5,
+      details: sameFingerprintUsed ? 'Dispositivo corresponde ao histórico' : 'Dispositivo não reconhecido'
+    },
+    {
+      id: 'same_user_agent',
+      name: 'User Agent Reconhecido',
+      description: 'Mesmo navegador e SO de sessões anteriores',
+      isActive: !isNewUser && sameUserAgentUsed,
+      weight: 5,
+      details: sameUserAgentUsed ? 'User agent corresponde ao histórico' : 'User agent não reconhecido'
     }
   ];
 
-  // Signin e Recovery - max 50 points
-  const signinRecoverySubFactors: SecuritySubFactor[] = [
+  // 2. Comportamento Temporal - max 25 points
+  const temporalBehaviorSubFactors: SecuritySubFactor[] = [
+    {
+      id: 'standard_shift',
+      name: 'Turno de Acesso Padrão',
+      description: 'Login em horário habitual do usuário',
+      isActive: standardShift,
+      weight: 10,
+      details: standardShift ? 'Horário consistente com padrão histórico' : 'Acesso em horário atípico'
+    },
+    {
+      id: 'low_dispersion',
+      name: 'Baixa Dispersão de Acessos',
+      description: 'Frequência de login dentro do padrão',
+      isActive: lowDispersion,
+      weight: 8,
+      details: lowDispersion ? 'Intervalo entre logins consistente' : 'Padrão de acessos irregular'
+    },
+    {
+      id: 'no_anomalies',
+      name: 'Sem Anomalias Detectadas',
+      description: 'Comportamento temporal sem desvios suspeitos',
+      isActive: noAnomalies,
+      weight: 7,
+      details: noAnomalies ? 'Nenhuma anomalia temporal identificada' : 'Anomalias comportamentais detectadas'
+    }
+  ];
+
+  // 3. Segurança de Conta - max 35 points
+  const accountSecuritySubFactors: SecuritySubFactor[] = [
     {
       id: 'otp_enabled',
       name: '2FA via OTP Habilitado',
       description: 'Autenticação de dois fatores via aplicativo',
       isActive: hasOtpEnabled,
-      weight: 25,
+      weight: 15,
       details: hasOtpEnabled ? 'Proteção adicional ativa' : 'Considere habilitar OTP para maior segurança'
     },
     {
@@ -184,79 +236,59 @@ export function generateSecurityData(): UserSecurityData {
       name: 'Troca de Senha Recente',
       description: 'Senha alterada nos últimos 3 meses',
       isActive: hasRecentPasswordChange,
-      weight: 25,
+      weight: 10,
       details: hasRecentPasswordChange 
         ? `Última alteração: ${lastPasswordChange?.toLocaleDateString('pt-BR')}`
         : 'Senha não alterada há mais de 3 meses'
-    }
-  ];
-
-  // Fatores de Alerta - negative/subtractive
-  const alertSubFactors: SecuritySubFactor[] = [
-    {
-      id: 'failed_attempts',
-      name: 'Tentativas de Login Falhas',
-      description: 'Múltiplas tentativas sem sucesso detectadas',
-      isActive: manyFailedAttempts,
-      weight: -15,
-      details: manyFailedAttempts ? `${failedLoginAttempts} tentativas falhas recentes` : 'Nenhuma tentativa suspeita'
     },
     {
-      id: 'different_infrastructure',
-      name: 'Infraestrutura Variável',
-      description: 'Logins de múltiplos dispositivos/locais',
-      isActive: differentInfrastructure,
-      weight: -12,
-      details: differentInfrastructure ? 'Possível ataque de validação de lista' : 'Infraestrutura consistente'
+      id: 'low_failed_attempts',
+      name: 'Baixa Taxa de Falhas de Login',
+      description: 'Poucas tentativas de login sem sucesso',
+      isActive: lowFailedAttempts,
+      weight: 10,
+      details: lowFailedAttempts 
+        ? 'Histórico de logins com baixa taxa de falhas' 
+        : `${failedLoginAttempts} tentativas falhas recentes detectadas`
     }
   ];
 
-  const calcGroupScore = (subFactors: SecuritySubFactor[], isNegative: boolean = false) => {
-    if (isNegative) {
-      return subFactors.filter(f => f.isActive).reduce((sum, f) => sum + Math.abs(f.weight), 0);
-    }
+  const calcGroupScore = (subFactors: SecuritySubFactor[]) => {
     return subFactors.filter(f => f.isActive).reduce((sum, f) => sum + f.weight, 0);
   };
 
   const factorGroups: SecurityFactorGroup[] = [
     {
-      id: 'security_activity',
-      name: 'Atividade de Segurança Recente',
-      description: 'Comportamento, infraestrutura e dispositivos',
+      id: 'infra_network',
+      name: 'Infraestrutura e Rede',
+      description: 'IP, fingerprint, reputação, geolocalização, device, user-agent',
       category: 'positive',
-      maxScore: 50,
-      currentScore: calcGroupScore(securityActivitySubFactors),
-      subFactors: securityActivitySubFactors
+      maxScore: 40,
+      currentScore: calcGroupScore(infraNetworkSubFactors),
+      subFactors: infraNetworkSubFactors
     },
     {
-      id: 'signin_recovery',
-      name: 'Signin e Recovery',
-      description: 'Autenticação 2FA e recuperação de senha',
+      id: 'temporal_behavior',
+      name: 'Comportamento Temporal',
+      description: 'Turnos, dispersão e anomalias',
       category: 'positive',
-      maxScore: 50,
-      currentScore: calcGroupScore(signinRecoverySubFactors),
-      subFactors: signinRecoverySubFactors
+      maxScore: 25,
+      currentScore: calcGroupScore(temporalBehaviorSubFactors),
+      subFactors: temporalBehaviorSubFactors
     },
     {
-      id: 'alert_factors',
-      name: 'Fatores de Alerta',
-      description: 'Tentativas falhas e infraestrutura variável',
-      category: 'negative',
-      maxScore: 27,
-      currentScore: calcGroupScore(alertSubFactors, true),
-      subFactors: alertSubFactors
+      id: 'account_security',
+      name: 'Segurança de Conta',
+      description: '2FA via OTP, reset de senha, falhas de login',
+      category: 'positive',
+      maxScore: 35,
+      currentScore: calcGroupScore(accountSecuritySubFactors),
+      subFactors: accountSecuritySubFactors
     }
   ];
 
-  // Calculate score based on factors: positive points - penalties
-  const positiveScore = factorGroups
-    .filter(g => g.category === 'positive')
-    .reduce((sum, g) => sum + g.currentScore, 0);
-  const penaltyScore = factorGroups
-    .filter(g => g.category === 'negative')
-    .reduce((sum, g) => sum + g.currentScore, 0);
-  
-  const score = Math.max(0, Math.min(100, positiveScore - penaltyScore));
+  // Calculate score based on factors sum (all positive now, max 100)
+  const score = Math.max(0, Math.min(100, factorGroups.reduce((sum, g) => sum + g.currentScore, 0)));
   const scoreLevel = getScoreLevel(score);
   
   const loginHistory = generateLoginHistory(Math.floor(Math.random() * 6) + 5, score > 50);
